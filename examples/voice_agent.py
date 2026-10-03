@@ -31,6 +31,14 @@ from __future__ import annotations
 
 import logging
 import os
+# Disable proxy for local connections (bypasses macOS system proxies that cause 502/503 errors on localhost)
+os.environ["NO_PROXY"] = "*"
+os.environ["no_proxy"] = "*"
+os.environ.pop("HTTP_PROXY", None)
+os.environ.pop("http_proxy", None)
+os.environ.pop("HTTPS_PROXY", None)
+os.environ.pop("https_proxy", None)
+
 import sys
 import time
 
@@ -67,10 +75,10 @@ USE_LOCAL = os.getenv("USE_LOCAL", "false").lower() == "true"
 
 # Local pipeline settings
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "medium")
-WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cuda")
+WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")
 PIPER_MODEL_PATH = os.getenv("PIPER_MODEL_PATH", "")
 PIPER_USE_CUDA = os.getenv("PIPER_USE_CUDA", "false").lower() == "true"
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
 
 
@@ -184,7 +192,13 @@ async def entrypoint(ctx: agents.JobContext) -> None:
     def on_user_input_transcribed(ev) -> None:
         nonlocal _transcription_time
         _transcription_time = time.perf_counter()
-        logger.debug(f"User said: {ev.transcript[:80]}...")
+        print(f"\n\033[1;32m🗣️  User (STT): {ev.transcript}\033[0m\n", flush=True)
+
+    @session.on("conversation_item_added")
+    def on_conversation_item_added(ev) -> None:
+        from livekit.agents.llm import ChatMessage
+        if isinstance(ev.item, ChatMessage) and ev.item.role == "assistant":
+            print(f"\n\033[1;36m🤖 Agent (TTS): {ev.item.text_content}\033[0m\n", flush=True)
 
     @session.on("agent_state_changed")
     def on_agent_state_changed(ev) -> None:
